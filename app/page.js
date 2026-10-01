@@ -103,7 +103,7 @@ export default function Home() {
           ))}
         </div>
       </section>
-
+<Cake />
       <section>
         <h2>One last thing…</h2>
         <div className="float" style={{ fontSize: '5rem', cursor: 'pointer' }} onClick={() => { setGift(true); setBurst(40) }}>{gift ? '🎂' : '🎁'}</div>
