@@ -10,7 +10,6 @@ export default function Book() {
     supabase.from('photos').select('*').order('year').order('created_at').then(({ data }) => setPhotos(data || []))
     supabase.from('wishlist').select('*').order('created_at').then(({ data }) => setItems(data || []))
   }, [])
-
   return (
     <div className="book">
       <style>{`
