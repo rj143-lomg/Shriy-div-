@@ -1,123 +1,152 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../../lib/supabase'
 
-const BITS = ['🌸', '🌷', '💜', '🌼', '✨', '🌺', '💮']
-const MSG =
-  "Happyyyyyyy birthday shruuuuuuuu... mujhe bas itna bolna hai kiiiiii yaar bas yaaaarrrrrrrrr, I can't get a better sis in my life than you 😭💜"
-const BIRTHDAY = new Date(2026, 9, 2)
-
-export default function Home() {
+export default function Admin() {
+  const [session, setSession] = useState(null)
+  const [ready, setReady] = useState(false)
+  const [email, setEmail] = useState('')
+  const [pass, setPass] = useState('')
+  const [err, setErr] = useState('')
+  const [msg, setMsg] = useState('')
   const [photos, setPhotos] = useState([])
   const [items, setItems] = useState([])
-  const [tab, setTab] = useState('drama')
-  const [open, setOpen] = useState(null)
-  const [left, setLeft] = useState(null)
-  const [typed, setTyped] = useState('')
-  const [gift, setGift] = useState(false)
-  const [burst, setBurst] = useState(0)
+  const [files, setFiles] = useState([])
+  const [caption, setCaption] = useState('')
+  const [year, setYear] = useState('')
+  const [kind, setKind] = useState('drama')
+  const [title, setTitle] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    supabase.from('photos').select('*').order('year', { ascending: true }).order('created_at').then(({ data }) => setPhotos(data || []))
-    supabase.from('wishlist').select('*').order('created_at').then(({ data }) => setItems(data || []))
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true) })
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    return () => sub.subscription.unsubscribe()
   }, [])
 
-  useEffect(() => {
-    const t = () => setLeft(BIRTHDAY - new Date())
-    t()
-    const id = setInterval(t, 1000)
-    return () => clearInterval(id)
-  }, [])
+  const load = async () => {
+    const a = await supabase.from('photos').select('*').order('year').order('created_at')
+    const b = await supabase.from('wishlist').select('*').order('created_at')
+    setPhotos(a.data || []); setItems(b.data || [])
+  }
+  useEffect(() => { if (session) load() }, [session])
 
-  useEffect(() => {
-    let i = 0
-    const id = setInterval(() => {
-      setTyped(MSG.slice(0, ++i))
-      if (i >= MSG.length) clearInterval(id)
-    }, 45)
-    return () => clearInterval(id)
-  }, [])
+  const login = async (e) => {
+    e.preventDefault(); setErr('')
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pass })
+    if (error) setErr(error.message)
+  }
 
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      (es) => es.forEach((e) => e.isIntersecting && e.target.classList.add('show')),
-      { threshold: 0.2 }
+  const upload = async (e) => {
+    e.preventDefault()
+    if (!files.length) return
+    const form = e.target
+    setBusy(true); setErr('')
+    let failed = 0
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      setMsg(`Uploading ${i + 1} of ${files.length}…`)
+      const path = `${Date.now()}-${i}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const up = await supabase.storage.from('photos').upload(path, file)
+      if (up.error) { failed++; setErr(up.error.message); continue }
+      const url = supabase.storage.from('photos').getPublicUrl(path).data.publicUrl
+      const ins = await supabase.from('photos').insert({ url, path, caption: caption || null, year: year ? Number(year) : null })
+      if (ins.error) { failed++; setErr(ins.error.message) }
+    }
+    setMsg(failed ? `Done, but ${failed} failed` : `All ${files.length} uploaded ✅`)
+    setFiles([]); setCaption(''); setYear(''); form.reset()
+    setBusy(false); load()
+  }
+
+  const updatePhoto = async (id, fields) => {
+    await supabase.from('photos').update(fields).eq('id', id)
+  }
+
+  const delPhoto = async (p) => {
+    await supabase.storage.from('photos').remove([p.path])
+    await supabase.from('photos').delete().eq('id', p.id)
+    load()
+  }
+
+  const addItem = async (e) => {
+    e.preventDefault()
+    if (!title.trim()) return
+    await supabase.from('wishlist').insert({ kind, title: title.trim(), note: note.trim() || null })
+    setTitle(''); setNote(''); load()
+  }
+  const toggle = async (x) => { await supabase.from('wishlist').update({ done: !x.done }).eq('id', x.id); load() }
+  const delItem = async (x) => { await supabase.from('wishlist').delete().eq('id', x.id); load() }
+
+  if (!ready) return <div className="admin">Loading…</div>
+
+  if (!session)
+    return (
+      <div className="admin" style={{ maxWidth: 380 }}>
+        <h2>Admin login 🔐</h2>
+        <form onSubmit={login}>
+          <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input type="password" placeholder="Password" value={pass} onChange={(e) => setPass(e.target.value)} required />
+          <button className="btn" type="submit">Log in</button>
+        </form>
+        {err && <p style={{ color: '#c0396b' }}>{err}</p>}
+      </div>
     )
-    document.querySelectorAll('.reveal').forEach((e) => io.observe(e))
-    return () => io.disconnect()
-  }, [photos, items])
-
-  const c = left > 0 ? { Days: Math.floor(left / 864e5), Hours: Math.floor(left / 36e5) % 24, Min: Math.floor(left / 6e4) % 60, Sec: Math.floor(left / 1e3) % 60 } : null
-  const list = items.filter((x) => x.kind === tab)
 
   return (
-    <>
-      <div id="fall">
-        {Array.from({ length: 22 + burst }).map((_, i) => (
-          <span key={i} className="p" style={{ left: `${(i * 37) % 100}%`, fontSize: 14 + ((i * 7) % 20), animationDuration: `${8 + ((i * 3) % 10)}s`, animationDelay: `-${(i * 5) % 12}s` }}>
-            {BITS[i % BITS.length]}
-          </span>
-        ))}
+    <div className="admin">
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <h2>Admin 💜</h2>
+        <button className="btn sm" onClick={() => supabase.auth.signOut()}>Log out</button>
+      </div>
+      {err && <p style={{ color: '#c0396b' }}>{err}</p>}
+
+      <div className="card" style={{ margin: '16px 0' }}>
+        <h3>Add photos (select many)</h3>
+        <form onSubmit={upload}>
+          <input type="file" accept="image/*" multiple onChange={(e) => setFiles(Array.from(e.target.files))} required />
+          <p style={{ margin: '4px 0' }}>{files.length ? `${files.length} photo(s) selected` : ''}</p>
+          <input placeholder="Year for all (optional)" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
+          <input placeholder="Caption for all (optional)" value={caption} onChange={(e) => setCaption(e.target.value)} />
+          <button className="btn" disabled={busy}>{busy ? 'Uploading…' : 'Upload'}</button>
+        </form>
+        {msg && <p>{msg}</p>}
+        <p style={{ opacity: 0.7, fontSize: '.9rem' }}>Tip: edit each photo's year and caption in the boxes below. They save when you tap outside the box.</p>
+        <div className="gal" style={{ marginTop: 16 }}>
+          {photos.map((p) => (
+            <div key={p.id}>
+              <div className="ph" style={{ transform: 'none' }}>
+                <img src={p.url} alt="" />
+                <button className="btn sm" style={{ position: 'absolute', top: 6, right: 6 }} onClick={() => delPhoto(p)}>✕</button>
+              </div>
+              <input type="number" placeholder="Year" defaultValue={p.year || ''} onBlur={(e) => updatePhoto(p.id, { year: e.target.value ? Number(e.target.value) : null })} />
+              <input placeholder="Caption" defaultValue={p.caption || ''} onBlur={(e) => updatePhoto(p.id, { caption: e.target.value || null })} />
+            </div>
+          ))}
+        </div>
       </div>
 
-      <section>
-        <div className="big float">🌸💜🌸</div>
-        <h1>Happy Birthday Shriya!</h1>
-        <p className="sub">2nd October · Shru, this one's all for you 🎂</p>
-        {c ? (
-          <div className="count">{Object.entries(c).map(([k, v]) => <div key={k}><b>{v}</b>{k}</div>)}</div>
-        ) : left !== null && <h2>It's your day! 🎉</h2>}
-      </section>
-
-      <section>
-        <h2>A message for you</h2>
-        <div className="card"><p style={{ fontSize: '1.2rem', lineHeight: 1.7, minHeight: '7em' }}>{typed}</p></div>
-      </section>
-
-      <section>
-        <h2 className="reveal">Shriya's memory lane 📸</h2>
-        {photos.length === 0 && <p className="sub reveal">Photos are coming soon 🌷</p>}
-        <div className="gal reveal">
-          {photos.map((p) => (
-            <div key={p.id} className="ph" onClick={() => setOpen(p)}>
-              <img src={p.url} alt={p.caption || 'memory'} loading="lazy" />
-              <div className="cap">{[p.year, p.caption].filter(Boolean).join(' · ')}</div>
+      <div className="card">
+        <h3>Watch & Read list</h3>
+        <form onSubmit={addItem}>
+          <select value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="drama">K-drama</option>
+            <option value="novel">Novel</option>
+          </select>
+          <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
+          <input placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+          <button className="btn">Add</button>
+        </form>
+        {items.map((x) => (
+          <div key={x.id} className="item">
+            <div className={x.done ? 'done' : ''}>{x.kind === 'drama' ? '📺' : '📚'} {x.title}{x.note && <small>{x.note}</small>}</div>
+            <div className="row">
+              <button className="btn sm" onClick={() => toggle(x)}>{x.done ? 'Undo' : 'Done'}</button>
+              <button className="btn sm" onClick={() => delItem(x)}>✕</button>
             </div>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="reveal">Shru's Watch & Read list 📺📚</h2>
-        <div className="tabs reveal">
-          <button className={`tab ${tab === 'drama' ? 'on' : ''}`} onClick={() => setTab('drama')}>K-dramas</button>
-          <button className={`tab ${tab === 'novel' ? 'on' : ''}`} onClick={() => setTab('novel')}>Novels</button>
-        </div>
-        <div style={{ maxWidth: 560, width: '100%' }} className="reveal">
-          {list.length === 0 && <p className="sub">Nothing here yet 🌸</p>}
-          {list.map((x) => (
-            <div key={x.id} className="item">
-              <div className={x.done ? 'done' : ''}>{x.title}{x.note && <small>{x.note}</small>}</div>
-              <span>{x.done ? '✅' : '⏳'}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2>One last thing…</h2>
-        <div className="float" style={{ fontSize: '5rem', cursor: 'pointer' }} onClick={() => { setGift(true); setBurst(40) }}>{gift ? '🎂' : '🎁'}</div>
-        <p className="sub" style={{ maxWidth: 480 }}>
-          {gift ? 'Wishing you endless cakes, brownies, cozy novels and K-dramas with the best endings. Borahae, Shru! 💜' : 'Tap the gift'}
-        </p>
-      </section>
-
-      {open && (
-        <div className="lb" onClick={() => setOpen(null)}>
-          <img src={open.url} alt={open.caption || ''} />
-          <p>{[open.year, open.caption].filter(Boolean).join(' · ')}</p>
-        </div>
-      )}
-    </>
+          </div>
+        ))}
+      </div>
+    </div>
   )
-        }
+      }
