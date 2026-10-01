@@ -77,7 +77,7 @@ export default function Home() {
       <section>
         <h2 className="reveal">Shriya's memory lane 📸</h2>
         {photos.length === 0 && <p className="sub reveal">Photos are coming soon 🌷</p>}
-        <div className="gal reveal">
+        <div className="gal">
           {photos.map((p) => (
             <div key={p.id} className="ph" onClick={() => setOpen(p)}>
               <img src={p.url} alt={p.caption || 'memory'} loading="lazy" />
@@ -93,7 +93,7 @@ export default function Home() {
           <button className={`tab ${tab === 'drama' ? 'on' : ''}`} onClick={() => setTab('drama')}>K-dramas</button>
           <button className={`tab ${tab === 'novel' ? 'on' : ''}`} onClick={() => setTab('novel')}>Novels</button>
         </div>
-        <div style={{ maxWidth: 560, width: '100%' }} className="reveal">
+<div style={{ maxWidth: 560, width: '100%' }}>
           {list.length === 0 && <p className="sub">Nothing here yet 🌸</p>}
           {list.map((x) => (
             <div key={x.id} className="item">
